@@ -1,0 +1,67 @@
+1.1.100 2017.
+* Fix memory leak in responce header
+* Change queue tracking from start & end to start & count.
+* Fix circular queue never using last slot
+
+1.1.007 2017.06.20
+* Fix crash when POST data is malformed
+* Add ihttp_parse_query_string function
+* Improve how POST of type application/x-www-form-urlencoded handles malformed data
+* Improve ihttp_decode function to handle + and to ignore malformed encoded data
+* Add HTTP 409 and HTTP 500 statuses
+* Add IHTTP_VERSION constant
+
+1.1.006 2016.11.17
+* Add basic Cookie header parsing
+* Add HTTP 403 status
+* When sending HTTP error response, don't print connection error if client had closed the connection
+
+1.1.005 2015.11.04
+* Switch to work queue thread model
+* Fix possible array overflow when all threads are busy
+* Disable SIGPIPE signal emission from send() when the client closed connection
+* Reduse HTTP persistent connection timeout from 5 seconds to 3 seconds
+* Ignore EPIPE and ECONNRESET errors
+* Move some variables out of struct HTTP_THREAD into thread's stack
+
+1.1.004 2015.08.06
+* Add ihttp_close_connection function
+* Add ihttp_utoc function and use it instead of itoa
+* Add ihttp_ctou function and use it instead of strtol
+* Set Content-Length header without using sprintf
+
+1.1.003 2015.04.01
+* Improve recieving of HTTP requests larger than 4096 bytes
+* Improve POST of type application/x-www-form-urlencoded request handling
+* Add ihttp_decode function
+
+1.1.002 2014.06.05
+* Switch from joinable threads to deatachable
+* Implement HTTP Pipeline and HTTP persistent connection support 
+* Fix SO_SNDTIMEO and improve data recieving function
+
+1.1.001 2014.04.10
+* Add http_set_status, http_add_header, http_set_header, http_rem_header functions
+* Do some preparatory work for HTTP Pipeline and Persistent connections support
+
+1.1.000 2014.04.06
+* Switch server's HTTP version to 1.1
+* Optimization in request's status line parsing
+* Implement thread id and proper variable for all thread's http data
+* New http_server struct, for all the server data
+* Fix socket timeout constant
+
+1.0.002 2014.03.31
+* Add request and response struct's in the main thread struct
+* Move some variables to appropriate request and response structs
+* Define constants for setting HTTP 200, 400, 404 status responses
+
+1.0.001 2013.08.16
+* Support for POST percent encoding
+
+1.0.000 2013.07.12
+* Initial release
+* Very basic implementation of HTTP 1.0 GET and POST application/x-www-form-urlencoded
+* Simple constant 400 and 404 error pages
+* Integrated file server with support of file lockup table
+* Pthread thread spawning without persistent connection
