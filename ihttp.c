@@ -1353,3 +1353,57 @@ void ihttp_rem_header(struct HTTP_THREAD *ihttp_thread, char *name, int name_len
 	}
 	return;
 }
+
+int ihttp_send_response_headers(struct HTTP_THREAD *ihttp_thread)
+{
+	// Send status line
+	switch (ihttp_thread->response.status)
+	{
+		case HTTP_200:
+			if (ihttp_send(ihttp_thread->socket, "HTTP/1.1 200 OK\r\n", sizeof("HTTP/1.1 200 OK\r\n") - 1) == SOCKET_ERROR)
+				return 0;
+		break;
+		case HTTP_400:
+			if (ihttp_send(ihttp_thread->socket, "HTTP/1.1 400 Bad Request\r\n", sizeof("HTTP/1.1 400 Bad Request\r\n") - 1) == SOCKET_ERROR)
+				return 0;
+		break;
+		case HTTP_403:
+			if (ihttp_send(ihttp_thread->socket, "HTTP/1.1 403 Forbidden\r\n", sizeof("HTTP/1.1 403 Forbidden\r\n") - 1) == SOCKET_ERROR)
+				return 0;
+		break;
+		case HTTP_404:
+			if (ihttp_send(ihttp_thread->socket, "HTTP/1.1 404 Not Found\r\n", sizeof("HTTP/1.1 404 Not Found\r\n") - 1) == SOCKET_ERROR)
+				return 0;
+		break;
+		case HTTP_409:
+			if (ihttp_send(ihttp_thread->socket, "HTTP/1.1 409 Conflict\r\n", sizeof("HTTP/1.1 409 Conflict\r\n") - 1) == SOCKET_ERROR)
+				return 0;
+		break;
+		case HTTP_500:
+			if (ihttp_send(ihttp_thread->socket, "HTTP/1.1 500 Internal Error\r\n", sizeof("HTTP/1.1 500 Internal Error\r\n") - 1) == SOCKET_ERROR)
+				return 0;
+		break;
+		default:
+			return 0;
+	}
+
+	// Send headers
+	for (int i = 0; i < 32; i++) {
+		// TODO: actually check the spec if empty name/value is allowed
+		if (ihttp_thread->response.header[i].name_len == 0 || ihttp_thread->response.header[i].value_len == 0) continue;
+		
+		if (ihttp_send(ihttp_thread->socket, ihttp_thread->response.header[i].name, ihttp_thread->response.header[i].name_len) == SOCKET_ERROR)
+			return 0;
+		if (ihttp_send(ihttp_thread->socket, ((char[]){':',' '}), 2) == SOCKET_ERROR)
+			return 0;
+		if (ihttp_send(ihttp_thread->socket, ihttp_thread->response.header[i].value, ihttp_thread->response.header[i].value_len) == SOCKET_ERROR)
+			return 0;
+		if (ihttp_send(ihttp_thread->socket, ((char[]){'\r','\n'}), 2) == SOCKET_ERROR)
+			return 0;
+	}
+
+	if (ihttp_send(ihttp_thread->socket, ((char[]){'\r','\n'}), 2) == SOCKET_ERROR)
+		return 0;
+
+	return 1;
+}
