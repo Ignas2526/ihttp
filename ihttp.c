@@ -562,13 +562,13 @@ uint16_t get_port_int(const struct sockaddr *sa)
 int ihttp_main(struct IHTTP_DATA *ihttp)
 {
 	/*
-		Initialize WSA – WSAStartup().
-		Create a socket – socket().
-		Bind the socket – bind().
-		Listen on the socket – listen().
-		Accept a connection – accept(), connect().
-		Send and receive data – recv(), send(), recvfrom(), sendto().
-		Disconnect – close()/closesocket().
+		Initialize WSA â€“ WSAStartup().
+		Create a socket â€“ socket().
+		Bind the socket â€“ bind().
+		Listen on the socket â€“ listen().
+		Accept a connection â€“ accept(), connect().
+		Send and receive data â€“ recv(), send(), recvfrom(), sendto().
+		Disconnect â€“ close()/closesocket().
 	 */
 	struct IHTTP_SERVER *server = ihttp->server;
 
@@ -644,7 +644,7 @@ int ihttp_main(struct IHTTP_DATA *ihttp)
 
 			// If socket queue is full, wait till there's a free spot
 			while (server->socket_queue_count == SOCKET_QUEUE_SIZE) {
-				pthread_cond_wait(&ihttp_removed_cond, server_mutex);
+				pthread_cond_wait(&ihttp_removed_cond, ihttp->server_mutex);
 			}
 			int i = (server->socket_queue_start + server->socket_queue_count) % SOCKET_QUEUE_SIZE;
 			server->socket_queue[i] = client_socket;
