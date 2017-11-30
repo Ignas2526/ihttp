@@ -245,10 +245,16 @@ void *ihttp_thread(void *arg);
 
 //HTTP response header and response status line manipulation functions
 // Each word in the header name must start with capital letter, remaining letters should be lowercase, e.g. Connection, Accept-Charset.
-void http_set_status(struct HTTP_THREAD *http, char *value, int value_len);//set status line
-void http_add_header(struct HTTP_THREAD *http, char *name, int name_len, char *value, int value_len);//add header without replacing, can be useful to add multiple headers with the same name
-void http_set_header(struct HTTP_THREAD *http, char *name, int name_len, char *value, int value_len);//add new or replace existing header
-void http_rem_header(struct HTTP_THREAD *http, char *name, int name_len);//remove header
+
+// Sets response status code
+int ihttp_set_response_status(struct HTTP_THREAD *ihttp_thread, int ihttp_status_code);
+
+void ihttp_add_header(struct HTTP_THREAD *ihttp_thread, char *name, int name_len, char *value, int value_len);//add header without replacing, can be useful to add multiple headers with the same name
+void ihttp_set_header(struct HTTP_THREAD *ihttp_thread, char *name, int name_len, char *value, int value_len);//add new or replace existing header
+void ihttp_rem_header(struct HTTP_THREAD *ihttp_thread, char *name, int name_len);//remove header
+
+// Sends status line and response headers. Returns 1 on success, 0 on failure
+int ihttp_send_response_headers(struct HTTP_THREAD *ihttp_thread);
 
 
 void http_sig_handle(int signal);
