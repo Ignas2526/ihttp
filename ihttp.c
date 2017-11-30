@@ -1279,15 +1279,17 @@ HTTP_THREAD_ERR:
 	 return NULL;*/
 }
 
-//set status line
-void http_set_status(struct HTTP_THREAD *http, char *value, int value_len)
+// Set response status
+int ihttp_set_response_status(struct HTTP_THREAD *ihttp_thread, int ihttp_status_code)
 {
-	void *tmp_alloc = realloc(http->response.header[0].value, sizeof("HTTP/1.1 ") - 1 + value_len);
-	if (tmp_alloc == NULL) return;
-	http->response.header[0].value = tmp_alloc;
-	http->response.header[0].value_len = value_len;
-	memcpy(&http->response.header[0].value[sizeof("HTTP/1.1 ")], value, value_len);
-	return;
+	if (ihttp_status_code == HTTP_200 || ihttp_status_code == HTTP_400 || ihttp_status_code == HTTP_403 ||
+		ihttp_status_code == HTTP_404 || ihttp_status_code == HTTP_409 || ihttp_status_code == HTTP_500) {
+		ihttp_thread->response.status = ihttp_status_code;
+		return 1;
+	}
+	
+	/**/
+	return 0;
 }
 
 //add header without replacing
