@@ -1008,192 +1008,122 @@ IHTTP_THREAD_REQUEST_HEADERS_DONE:
 	
 	
 	/*Initialize response headers*/
-	char *tmp_value = realloc(ihttp->thread->response.header[0].value, sizeof("HTTP/1.1 200 OK") - 1);
-	if (tmp_value == NULL) goto HTTP_THREAD_ERR;
-	ihttp->thread->response.header[0].value = tmp_value;
-	ihttp->thread->response.header[0].value_len = sizeof("HTTP/1.1 200 OK") - 1;
-	
-	memcpy(ihttp->thread->response.header[0].value, ((char[]){'H','T','T','P','/','1','.','1',' ','2','0','0',' ','O','K'}), sizeof("HTTP/1.1 200 OK") - 1);
-	
+	ihttp_set_response_status(ihttp->thread, HTTP_200);
 	ihttp_add_header(ihttp->thread, "Connection", sizeof("Connection") - 1, "keep-alive", sizeof("keep-alive") - 1);
 	ihttp_add_header(ihttp->thread, "Content-Type", sizeof("Content-Type") - 1, "text/html; charset=utf-8", sizeof("text/html; charset=utf-8") - 1);
 	
 	ihttp->thread_function(ihttp);
 	
 	if (ihttp->thread->status_code == HTTP_200) {
-		char *http_header = NULL;
-		http_header = malloc(256);
-		if (http_header == NULL) goto HTTP_THREAD_ERR;
-		
-		int http_header_alloc = 256; int http_header_i = 0;
-		
-		for (int i = 0; i < 32; i++) {
-			if (ihttp->thread->response.header[i].name_len == 0 && ihttp->thread->response.header[i].value_len == 0) continue;
-			// Only allocate more memory if there's not enough (tmp_buff_len+name_len+" : "+value_len+\r\n)>allocated
-			if ((http_header_i + (ihttp->thread->response.header[i].name_len + 2 + ihttp->thread->response.header[i].value_len + 2)) > http_header_alloc) {
-				http_header_alloc += 256;
-				char *tmp_http_header;
-				tmp_http_header = realloc(http_header, http_header_alloc);
-				if (tmp_http_header == NULL) goto HTTP_THREAD_ERR;
-				http_header = tmp_http_header;
-			}
-			
-			if (ihttp->thread->response.header[i].name_len) {//Status line has no name
-				memcpy(&http_header[http_header_i], ihttp->thread->response.header[i].name, ihttp->thread->response.header[i].name_len);
-				http_header_i += ihttp->thread->response.header[i].name_len;
-				memcpy(&http_header[http_header_i], ((char[]){':',' '}), 2);
-				http_header_i += 2;
-			}
-			
-			memcpy(&http_header[http_header_i], ihttp->thread->response.header[i].value, ihttp->thread->response.header[i].value_len);
-			http_header_i += ihttp->thread->response.header[i].value_len;
-			memcpy(&http_header[http_header_i], ((char[]){'\r','\n'}), 2);
-			http_header_i += 2;
-		}
-		
-		// Only allocate more memory if there's not enough
-		if ((http_header_i + sizeof("Content-Length: XXXXXXXXXX\r\n\r\n") - 1) > http_header_alloc) {
-			http_header_alloc += 256;
-			char *tmp_http_header;
-			tmp_http_header = realloc(http_header, http_header_alloc);
-			if (tmp_http_header == NULL) {puts("Error, realloc()"); goto HTTP_THREAD_ERR;}
-			http_header = tmp_http_header;
-		}
-		
 		// File
 		if (ihttp->thread->send_file == 0) {
-			FILE *fp;
-			int bytes_sent;
 			ihttp->thread->send_file = 1;
-			fp = fopen(ihttp->thread->file_path, "rb");
-			if (fp != NULL) {
-				long fsize;
-				fseek(fp, 0, SEEK_END); fsize = ftell(fp); fseek(fp, 0, SEEK_SET);
-				memcpy(&http_header[http_header_i], ((char[]){'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' '}), sizeof("Content-Length: ") - 1);
-				http_header_i += sizeof("Content-Length: ") - 1;
-				http_header_i += (ihttp_utoc(fsize, &http_header[http_header_i]) - &http_header[http_header_i]);
-				memcpy(&http_header[http_header_i], ((char[]){'\r','\n','\r','\n'}), sizeof("\r\n\r\n") - 1);
-				http_header_i += sizeof("\r\n\r\n") - 1;
-				
 
-				bytes_sent = ihttp_send(ihttp->thread->socket, http_header, http_header_i);
-				if (bytes_sent == SOCKET_ERROR) {
+			FILE *fp = fopen(ihttp->thread->file_path, "rb");
+
+			if (fp == NULL) {
+				ihttp_set_response_status(ihttp->thread, HTTP_404);
+				goto IHTTP_STATUS_NOT_200;
+			}
+
+			long fsize;
+			fseek(fp, 0, SEEK_END); fsize = ftell(fp); fseek(fp, 0, SEEK_SET);
+			
+			char *http_content_length = malloc(16); int http_content_length_len;
+			if (http_content_length == NULL) goto HTTP_THREAD_ERR;
+
+			http_content_length_len = ihttp_utoc(fsize, http_content_length) - http_content_length;
+
+			ihttp_add_header(ihttp->thread, "Content-Length", sizeof("Content-Length") - 1, http_content_length, http_content_length_len);
+			free(http_content_length);
+
+			if (!ihttp_send_response_headers(ihttp->thread)) {
+				fclose(fp);
+				// Skip errors that happen when client had closed the connection
+				if (http_error() != EPIPE && http_error() != ECONNRESET)
+					printf("Error, send(): %u.\n", http_error());
+				goto IHTTP_THREAD_RESET_CLOSE;
+			}
+			
+			ihttp_require_response_length(2048, ihttp);
+			int file_length;
+			while ((file_length = fread(ihttp->thread->response.data, sizeof(char), 2048, fp)) != 0) {
+				if (ihttp_send(ihttp->thread->socket, ihttp->thread->response.data, file_length) == SOCKET_ERROR) {
 					fclose(fp);
 					// Skip errors that happen when client had closed the connection
 					if (http_error() != EPIPE && http_error() != ECONNRESET)
 						printf("Error, send(): %u.\n", http_error());
 					goto IHTTP_THREAD_RESET_CLOSE;
 				}
-				
-				ihttp_require_response_length(2048, ihttp);
-				int file_length;
-				while ((file_length = fread(ihttp->thread->response.data, sizeof(char), 2048, fp)) != 0) {
-					bytes_sent = ihttp_send(ihttp->thread->socket, ihttp->thread->response.data, file_length);
-					if (bytes_sent == SOCKET_ERROR) {
-						fclose(fp);
-						// Skip errors that happen when client had closed the connection
-						if (http_error() != EPIPE && http_error() != ECONNRESET)
-							printf("Error, send(): %u.\n", http_error());
-						goto IHTTP_THREAD_RESET_CLOSE;
-					}
-					if (file_length < 2048) break;
-				}
-				fclose(fp);
-				free(http_header);
-				goto IHTTP_CONTINUE_CONNECTION;
+				if (file_length < 2048) break;
 			}
-			ihttp->thread->status_code = HTTP_404;
-			
-			// Regular data
+
+			fclose(fp);
+			goto IHTTP_CONTINUE_CONNECTION;
+		
+		// Regular data
 		} else {
-			int bytes_sent;
-			memcpy(&http_header[http_header_i], ((char[]){'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' '}), sizeof("Content-Length: ") - 1);
-			http_header_i += sizeof("Content-Length: ") - 1;
-			http_header_i += (ihttp_utoc(ihttp->thread->response.data_i, &http_header[http_header_i]) - &http_header[http_header_i]);
-			memcpy(&http_header[http_header_i], ((char[]){'\r','\n','\r','\n'}), sizeof("\r\n\r\n") - 1);
-			http_header_i += sizeof("\r\n\r\n") - 1;
+			char *http_content_length = malloc(16); int http_content_length_len;
+			if (http_content_length == NULL) goto HTTP_THREAD_ERR;
+
+			http_content_length_len = ihttp_utoc(ihttp->thread->response.data_i, http_content_length) - http_content_length;
 			
-			bytes_sent = ihttp_send(ihttp->thread->socket, http_header, http_header_i);
-			if (bytes_sent == SOCKET_ERROR) {
+			ihttp_add_header(ihttp->thread, "Content-Length", sizeof("Content-Length") - 1, http_content_length, http_content_length_len);
+
+			if (!ihttp_send_response_headers(ihttp->thread)) {
 				// Skip errors that happen when client had closed the connection
 				if (http_error() != EPIPE && http_error() != ECONNRESET)
 					printf("Error, send(): %u.\n", http_error());
 				goto IHTTP_THREAD_RESET_CLOSE;
 			}
-			bytes_sent = ihttp_send(ihttp->thread->socket, ihttp->thread->response.data, ihttp->thread->response.data_i);
-			if (bytes_sent == SOCKET_ERROR) {
+			
+			if (ihttp_send(ihttp->thread->socket, ihttp->thread->response.data, ihttp->thread->response.data_i) == SOCKET_ERROR) {
 				// Skip errors that happen when client had closed the connection
 				if(http_error() != EPIPE && http_error() != ECONNRESET)
 					printf("Error, send(): %u.\n", http_error());
 				goto IHTTP_THREAD_RESET_CLOSE;
 			}
 			
-			free(http_header);
 			goto IHTTP_CONTINUE_CONNECTION;
 		}
 	}
-	
-	switch(ihttp->thread->status_code) {
+
+IHTTP_STATUS_NOT_200:;
+	switch(ihttp->thread->response.status) {
 		default:
 		case HTTP_200:
 			goto IHTTP_CONTINUE_CONNECTION;
 			break;
 		case HTTP_400:
-		{
-			int bytes_sent = ihttp_send(ihttp->thread->socket, http_err400, http_err400_len);
-			if (bytes_sent == SOCKET_ERROR) {
-				// Skip errors that happen when client had closed the connection
-				if(http_error() != EPIPE && http_error() != ECONNRESET)
-					printf("Error, send(): %u\n", http_error());
-				goto IHTTP_THREAD_RESET_CLOSE;
-			}
-			break;
-		}
 		case HTTP_403:
-		{
-			int bytes_sent = ihttp_send(ihttp->thread->socket, http_err403, http_err403_len);
-			if (bytes_sent == SOCKET_ERROR) {
-				// Skip errors that happen when client had closed the connection
-				if(http_error() != EPIPE && http_error() != ECONNRESET)
-					printf("Error, send(): %u\n", http_error());
-				goto IHTTP_THREAD_RESET_CLOSE;
-			}
-			break;
-		}
 		case HTTP_404:
-		{
-			printf("HTTP 404 uri (%d) %.*s\n", ihttp->thread->uri_len, ihttp->thread->uri_len, ihttp->thread->uri);
-			int bytes_sent = ihttp_send(ihttp->thread->socket, http_err404, http_err404_len);
-			if (bytes_sent == SOCKET_ERROR) {
-				// Skip errors that happen when client had closed the connection
-				if(http_error() != EPIPE && http_error() != ECONNRESET)
-					printf("Error, send(): %u\n", http_error());
-				goto IHTTP_THREAD_RESET_CLOSE;
-			}
-			break;
-		}
 		case HTTP_409:
-		{
-			int bytes_sent = ihttp_send(ihttp->thread->socket, http_err409, http_err409_len);
-			if (bytes_sent == SOCKET_ERROR) {
-				// Skip errors that happen when client had closed the connection
-				if(http_error() != EPIPE && http_error() != ECONNRESET)
-					printf("Error, send(): %u\n", http_error());
-				goto IHTTP_THREAD_RESET_CLOSE;
-			}
-			break;
-		}
 		case HTTP_500:
-		{
-			int bytes_sent = ihttp_send(ihttp->thread->socket, http_err500, http_err500_len);
-			if (bytes_sent == SOCKET_ERROR) {
+			ihttp->thread->response.data_i = 0;
+			ihttp->get_error_page_content(ihttp);
+			
+			char *http_content_length = malloc(16); int http_content_length_len;
+			if (http_content_length == NULL) goto HTTP_THREAD_ERR;
+
+			http_content_length_len = ihttp_utoc(ihttp->thread->response.data_i, http_content_length) - http_content_length;
+			
+			if (!ihttp_send_response_headers(ihttp->thread)) {
 				// Skip errors that happen when client had closed the connection
-				if(http_error() != EPIPE && http_error() != ECONNRESET)
-					printf("Error, send(): %u\n", http_error());
+				if (http_error() != EPIPE && http_error() != ECONNRESET)
+					printf("Error, send(): %u.\n", http_error());
 				goto IHTTP_THREAD_RESET_CLOSE;
 			}
+			
+			if (ihttp_send(ihttp->thread->socket, ihttp->thread->response.data, ihttp->thread->response.data_i) == SOCKET_ERROR) {
+				// Skip errors that happen when client had closed the connection
+				if(http_error() != EPIPE && http_error() != ECONNRESET)
+					printf("Error, send(): %u.\n", http_error());
+				goto IHTTP_THREAD_RESET_CLOSE;
+			}
+			
+			goto IHTTP_CONTINUE_CONNECTION;
+
 			break;
-		}
 	}
 	
 IHTTP_CONTINUE_CONNECTION:
