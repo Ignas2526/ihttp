@@ -1015,8 +1015,8 @@ IHTTP_THREAD_REQUEST_HEADERS_DONE:
 	
 	memcpy(ihttp->thread->response.header[0].value, ((char[]){'H','T','T','P','/','1','.','1',' ','2','0','0',' ','O','K'}), sizeof("HTTP/1.1 200 OK") - 1);
 	
-	http_add_header(ihttp->thread, "Connection", sizeof("Connection")-1, "keep-alive", sizeof("keep-alive")-1);
-	http_add_header(ihttp->thread, "Content-Type", sizeof("Content-Type")-1, "text/html; charset=utf-8", sizeof("text/html; charset=utf-8")-1);
+	ihttp_add_header(ihttp->thread, "Connection", sizeof("Connection") - 1, "keep-alive", sizeof("keep-alive") - 1);
+	ihttp_add_header(ihttp->thread, "Content-Type", sizeof("Content-Type") - 1, "text/html; charset=utf-8", sizeof("text/html; charset=utf-8") - 1);
 	
 	ihttp->thread_function(ihttp);
 	
@@ -1291,63 +1291,62 @@ void http_set_status(struct HTTP_THREAD *http, char *value, int value_len)
 }
 
 //add header without replacing
-void http_add_header(struct HTTP_THREAD *http, char *name, int name_len, char *value, int value_len)
+void ihttp_add_header(struct HTTP_THREAD *ihttp_thread, char *name, int name_len, char *value, int value_len)
 {
-	for (int i = 1; i < 32; i++) {
+	for (int i = 0; i < 32; i++) {
 		//empty name and value mean empty header
-		if (http->response.header[i].value_len != 0 || http->response.header[i].name_len != 0) continue;
-		void *tmp_alloc = realloc(http->response.header[i].name, name_len);
+		if (ihttp_thread->response.header[i].value_len != 0 || ihttp_thread->response.header[i].name_len != 0) continue;
+		void *tmp_alloc = realloc(ihttp_thread->response.header[i].name, name_len);
 		if (tmp_alloc == NULL) return;
 		
-		http->response.header[i].name = tmp_alloc;
-		http->response.header[i].name_len = name_len;
-		memcpy(http->response.header[i].name, name, name_len);
-		tmp_alloc = realloc(http->response.header[i].value, value_len);
+		ihttp_thread->response.header[i].name = tmp_alloc;
+		ihttp_thread->response.header[i].name_len = name_len;
+		memcpy(ihttp_thread->response.header[i].name, name, name_len);
+		tmp_alloc = realloc(ihttp_thread->response.header[i].value, value_len);
 		if (tmp_alloc == NULL) return;
 		
-		http->response.header[i].value = tmp_alloc;
-		http->response.header[i].value_len = value_len;
-		memcpy(http->response.header[i].value, value, value_len);
+		ihttp_thread->response.header[i].value = tmp_alloc;
+		ihttp_thread->response.header[i].value_len = value_len;
+		memcpy(ihttp_thread->response.header[i].value, value, value_len);
 		break;
 	}
 	return;
 }
 
-void http_set_header(struct HTTP_THREAD *http, char *name, int name_len, char *value, int value_len)//add new or replace existing header
+void ihttp_set_header(struct HTTP_THREAD *ihttp_thread, char *name, int name_len, char *value, int value_len)//add new or replace existing header
 {
-	int i; void *tmp_alloc;
-	for (i=1; i<32; i++) {//same name header
-		if (http->response.header[i].name_len == name_len && memcmp(http->response.header[i].name, name, name_len) == 0) goto SET_ONLY_VALUE;
+	void *tmp_alloc; int i = 0;
+	for (i=0; i<32; i++) {//same name header
+		if (ihttp_thread->response.header[i].name_len == name_len && memcmp(ihttp_thread->response.header[i].name, name, name_len) == 0) goto SET_ONLY_VALUE;
 	}
 	
 	for (i=1; i<32; i++) {//new empty header
-		if (http->response.header[i].value_len == 0 && http->response.header[i].name_len == 0) goto SET_BOTH;
+		if (ihttp_thread->response.header[i].value_len == 0 && ihttp_thread->response.header[i].name_len == 0) goto SET_BOTH;
 	}
 	//same named header nor empty header was found
 	return;
 SET_BOTH:
-	tmp_alloc = realloc(http->response.header[i].name, name_len);
+	tmp_alloc = realloc(ihttp_thread->response.header[i].name, name_len);
 	if (tmp_alloc == NULL) return;
-	http->response.header[i].name = tmp_alloc;
-	http->response.header[i].name_len = name_len;
-	memcpy(http->response.header[i].name, name, name_len);
+	ihttp_thread->response.header[i].name = tmp_alloc;
+	ihttp_thread->response.header[i].name_len = name_len;
+	memcpy(ihttp_thread->response.header[i].name, name, name_len);
 	
 SET_ONLY_VALUE:
-	tmp_alloc = realloc(http->response.header[i].value, value_len);
+	tmp_alloc = realloc(ihttp_thread->response.header[i].value, value_len);
 	if (tmp_alloc == NULL) return;
-	http->response.header[i].value = tmp_alloc;
-	http->response.header[i].value_len = value_len;
-	memcpy(http->response.header[i].value, value, value_len);
+	ihttp_thread->response.header[i].value = tmp_alloc;
+	ihttp_thread->response.header[i].value_len = value_len;
+	memcpy(ihttp_thread->response.header[i].value, value, value_len);
 	return;
 }
 
-void http_rem_header(struct HTTP_THREAD *http, char *name, int name_len)//remove header
+void ihttp_rem_header(struct HTTP_THREAD *ihttp_thread, char *name, int name_len)//remove header
 {
-	int i;
-	for (i=1; i<32; i++) {
-		if (http->response.header[i].name_len != name_len || memcmp(http->response.header[i].name, name, name_len) != 0) continue;
-		http->response.header[i].name_len = 0;
-		http->response.header[i].value_len = 0;
+	for (int i=0; i<32; i++) {
+		if (ihttp_thread->response.header[i].name_len != name_len || memcmp(ihttp_thread->response.header[i].name, name, name_len) != 0) continue;
+		ihttp_thread->response.header[i].name_len = 0;
+		ihttp_thread->response.header[i].value_len = 0;
 		break;
 	}
 	return;
