@@ -8,22 +8,7 @@ pthread_cond_t ihttp_removed_cond  = PTHREAD_COND_INITIALIZER;
 // TODO IMPORTANT: send returns the numbe of bytes sent. Swith to bytes_recvd, bytes_sent
 // TODO close() on UNIXes and  closesocket on windows
 
-const char http_err400[] = "HTTP/1.1 400 Bad Request\r\nConnection: Close\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 11\r\n\r\nBad Request";
-const int http_err400_len = sizeof(http_err400) - 1;
-
-const char http_err403[] = "HTTP/1.1 403 Forbidden\r\nConnection: keep-alive\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 17\r\n\r\nAccess Forbidden!";
-const int http_err403_len = sizeof(http_err403) - 1;
-
-const char http_err404[] = "HTTP/1.1 404 Not Found\r\nConnection: keep-alive\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 15\r\n\r\nPage Not Found!";
-const int http_err404_len = sizeof(http_err404) - 1;
-
-const char http_err409[] = "HTTP/1.1 409 Conflict\r\nConnection: keep-alive\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 9\r\n\r\nConflict!";
-const int http_err409_len = sizeof(http_err404) - 1;
-
-const char http_err500[] = "HTTP/1.1 500 Internal Error\r\nConnection: keep-alive\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 13\r\n\r\nServer Error!";
-const int http_err500_len = sizeof(http_err500) - 1;
-
-struct IHTTP_DATA *ihttp_init(void (*thread_function)(struct IHTTP_DATA *))
+struct IHTTP_DATA *ihttp_init(void (*thread_function)(struct IHTTP_DATA *), int (*get_error_page_content)(struct IHTTP_DATA *))
 {
 	#ifdef WIN32
 		WSADATA wsaData;
@@ -154,12 +139,14 @@ struct IHTTP_DATA *ihttp_init(void (*thread_function)(struct IHTTP_DATA *))
 	
 	ihttp->thread_id = 0;
 	ihttp->thread_function = thread_function;
+	ihttp->get_error_page_content = get_error_page_content;
 	for (int i = 1; i < WORKER_THREAD_COUNT; i++) {//Fill data
 		ihttp[i].server = ihttp->server;
 		ihttp[i].thread = &ihttp->thread[i];
 		ihttp[i].server_mutex = ihttp->server_mutex;
 		ihttp[i].thread_id = i;
 		ihttp[i].thread_function = thread_function;
+		ihttp[i].get_error_page_content = get_error_page_content;
 	}
 	return ihttp;
 }
@@ -1199,7 +1186,29 @@ IHTTP_THREAD_RESET_CLOSE:
 	//return NULL;
 	goto IHTTP_THREAD_START;
 HTTP_THREAD_ERR:
-	send(ihttp->thread->socket, http_err400, http_err400_len, 0);
+	ihttp_set_response_status(ihttp->thread, HTTP_400);
+	ihttp->thread->response.data_i = 0;
+	ihttp->get_error_page_content(ihttp);
+
+	char *http_content_length = malloc(16); int http_content_length_len;
+	if (http_content_length == NULL) goto HTTP_THREAD_ERR;
+
+	http_content_length_len = ihttp_utoc(ihttp->thread->response.data_i, http_content_length) - http_content_length;
+	
+	if (!ihttp_send_response_headers(ihttp->thread)) {
+		// Skip errors that happen when client had closed the connection
+		if (http_error() != EPIPE && http_error() != ECONNRESET)
+			printf("Error, send(): %u.\n", http_error());
+		goto IHTTP_THREAD_RESET_CLOSE;
+	}
+	
+	if (ihttp_send(ihttp->thread->socket, ihttp->thread->response.data, ihttp->thread->response.data_i) == SOCKET_ERROR) {
+		// Skip errors that happen when client had closed the connection
+		if(http_error() != EPIPE && http_error() != ECONNRESET)
+			printf("Error, send(): %u.\n", http_error());
+		goto IHTTP_THREAD_RESET_CLOSE;
+	}
+
 	goto IHTTP_THREAD_RESET_CLOSE;
 	//HTTP_PROGRAM_TERMINATE:
 	/*	pthread_mutex_lock(ihttp->server_mutex);
