@@ -2,7 +2,7 @@
 
 #define _INC_IHTTP
 
-#define IHTTP_VERSION "1.1.007"
+#define IHTTP_VERSION "1.1.101"
 /*
 Windows
 _WIN32   Both 32 bit and 64 bit
@@ -159,18 +159,20 @@ struct HTTP_THREAD {
 	} request;
 	
 	struct {
-	  char *data;
+		char *data;
 		unsigned int data_i;
 		unsigned int data_len;
 		unsigned int data_alloc;
 		
+		int status; // response status code
+
 		int header_i;
 		struct http_name_value_pair header[32];
 	} response;
 
-  char method;//HTTP Request Method
-  char *uri; int uri_len;//HTTP Request url
-  char *version; int version_len;//HTTP Request Version
+  char method; // HTTP Request Method
+  char *uri; int uri_len; // HTTP Request url
+  char *version; int version_len; // HTTP Request Version
   
   int post_len; int post_alloc;
   struct http_name_value_pair *post;
@@ -180,8 +182,6 @@ struct HTTP_THREAD {
   
 	int send_file;
   char *file_path; int file_path_len;
-	
-	int status_code;
 	
 };
 
@@ -215,6 +215,7 @@ struct IHTTP_DATA {
 	pthread_mutex_t *server_mutex;
 	int thread_id;
 	void (*thread_function)(struct IHTTP_DATA *);
+	int (*get_error_page_content)(struct IHTTP_DATA *);// error_code, ihttp
 	void *arg;
 };
 
@@ -223,7 +224,7 @@ struct IHTTP_DATA {
 
 
 
-struct IHTTP_DATA *ihttp_init(void (*thread_function)(struct IHTTP_DATA *));
+struct IHTTP_DATA *ihttp_init(void (*thread_function)(struct IHTTP_DATA *), int (*get_error_page_content)(struct IHTTP_DATA *));
 
 // Initialize create socket and bind it: WSAStartup(), socket(), bind()
 // Returns 0 on the error, r<0 on ihttp error and r>0 on WSA error.
@@ -255,7 +256,6 @@ void ihttp_rem_header(struct HTTP_THREAD *ihttp_thread, char *name, int name_len
 
 // Sends status line and response headers. Returns 1 on success, 0 on failure
 int ihttp_send_response_headers(struct HTTP_THREAD *ihttp_thread);
-
 
 void http_sig_handle(int signal);
 
