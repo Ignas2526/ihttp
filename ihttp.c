@@ -138,8 +138,10 @@ struct IHTTP_DATA *ihttp_init(void (*thread_function)(struct IHTTP_DATA *), int 
 	}
 	
 	ihttp->thread_id = 0;
+	
 	ihttp->thread_function = thread_function;
 	ihttp->get_error_page_content = get_error_page_content;
+
 	for (int i = 1; i < WORKER_THREAD_COUNT; i++) {//Fill data
 		ihttp[i].server = ihttp->server;
 		ihttp[i].thread = &ihttp->thread[i];
@@ -700,6 +702,7 @@ IHTTP_THREAD_START:
 
 		setsockopt(ihttp->thread->socket, SOL_SOCKET, SO_SNDTIMEO, (void *)&timeout, sizeof(timeout));
 	}
+
 	ihttp->thread->request.data_header_len = 0;
 	
 IHTTP_THREAD_HTTP_CONTINUE:
@@ -735,7 +738,7 @@ IHTTP_THREAD_HTTP_CONTINUE:
 	ihttp->thread->response.data_i = 0;
 	ihttp->thread->response.data_len = 0;
 	
-	ihttp->thread->status_code = HTTP_200;
+	ihttp->thread->response.status = HTTP_200;
 	
 	// Find all header field names, its values and where HTTP header ends
 	// Recieve HTTP request line (first line)
@@ -996,12 +999,13 @@ IHTTP_THREAD_REQUEST_HEADERS_DONE:
 	
 	/*Initialize response headers*/
 	ihttp_set_response_status(ihttp->thread, HTTP_200);
+
 	ihttp_add_header(ihttp->thread, "Connection", sizeof("Connection") - 1, "keep-alive", sizeof("keep-alive") - 1);
 	ihttp_add_header(ihttp->thread, "Content-Type", sizeof("Content-Type") - 1, "text/html; charset=utf-8", sizeof("text/html; charset=utf-8") - 1);
 	
 	ihttp->thread_function(ihttp);
 	
-	if (ihttp->thread->status_code == HTTP_200) {
+	if (ihttp->thread->response.status == HTTP_200) {
 		// File
 		if (ihttp->thread->send_file == 0) {
 			ihttp->thread->send_file = 1;
@@ -1047,7 +1051,7 @@ IHTTP_THREAD_REQUEST_HEADERS_DONE:
 
 			fclose(fp);
 			goto IHTTP_CONTINUE_CONNECTION;
-		
+			
 		// Regular data
 		} else {
 			char *http_content_length = malloc(16); int http_content_length_len;
