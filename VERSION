@@ -1,7 +1,26 @@
-1.1.100 2017.
-* Fix memory leak in responce header
-* Change queue tracking from start & end to start & count.
-* Fix circular queue never using last slot
+1.1.101 2018.07.21
+* Add client's raw_ip_address, ip_address, and port to struct HTTP_THREAD
+* Improve HTTP header decoding. Always Uppercase header name; properly validate characters that make the header name 
+* Fix crash due to data_header_len not being set to 0 on IHTTP_THREAD_RESET_CLOSE
+
+1.1.100 2017.11.27
+* Add support for applications to dynamically generate the error page contents and headers
+* Add ability to set get_error_page_content function
+* Add support for listening on multiple sockets at once using select(2)
+* Perform better when server queue is almost full, handle slow loris attack better
+* Add queue_load — an integer indicating a percentage of how full the queue is at a time of request
+* Add request_time — unix timestamp with milliseconds of when the thread started handling the request
+* Set SO_RCVTIMEO and SO_SNDTIMEO socket options based on how loaded is the queue 
+* Improvements and fixes in thread queue tracking
+* Rename ihttp_init_socket function to ihttp_add_listener
+* Set SOCK_CLOEXEC, TCP_DEFER_ACCEPT and TCP_FASTOPEN socket options in ihttp_add_listener if possible
+* Add IHTTP_SOMAXCONN, IHTTP_SEND_RECV_TIMEOUT_SEC, IHTTP_QUEUE_HIGH_LOAD, IHTTP_HLOAD_SEND_RECV_TIMEOUT_SEC constants
+* Add ihttp_set_response_status function
+* Rename http_set_status function to ihttp_set_response_status
+* Add ihttp_recieve, ihttp_recieve_all and ihttp_send functions
+* More cleaner and faster HTTP response status and header sending
+* Fixed couple memory leaks
+* General code cleanup and improvements
 
 1.1.007 2017.06.20
 * Fix crash when POST data is malformed
