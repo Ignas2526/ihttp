@@ -413,7 +413,7 @@ int ihttp_send(ihttp_socket_t socket, const char *buffer, int buffer_len)
 	// If send returns 0 either the client closed the connection or there's no data
 	int bytes_sent_total = 0, bytes_sent = 0;
 	while (bytes_sent_total < buffer_len) {
-		if ((bytes_sent = send(socket, &buffer[bytes_sent_total], buffer_len, 0)) <= 0) return bytes_sent;
+		if ((bytes_sent = send(socket, &buffer[bytes_sent_total], (buffer_len - total_sent), 0)) <= 0) return bytes_sent;
 		bytes_sent_total += bytes_sent;
 	}
 	return bytes_sent_total;
