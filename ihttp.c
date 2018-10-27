@@ -607,7 +607,7 @@ int ihttp_main(struct IHTTP_DATA *ihttp)
 			struct ihttp_listener_st *listener = &server->listeners[i];
 			if (!FD_ISSET(listener->socket, &socket_set_tmp)) continue;
 			
-			struct sockaddr_storage addr; socklen_t addr_len;
+			struct sockaddr_storage addr; socklen_t addr_len = sizeof(struct sockaddr_storage);
 			ihttp_socket_t client_socket = accept(listener->socket, (struct sockaddr *)&addr, &addr_len);
 			if (client_socket == INVALID_SOCKET) continue;
 			if (fcntl(client_socket, F_SETFD, FD_CLOEXEC) == -1) continue;
