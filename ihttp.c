@@ -381,27 +381,29 @@ int ihttp_require_response_length(int length, struct IHTTP_DATA *ihttp)
 }
 
 /*
-	Recieves data from the socket.
-	Will recieve at least 1 byte, at most buffer_len bytes.
+	Receives data from the socket.
+	Will receive at least 1 byte, at most buffer_len bytes.
 */
-int ihttp_recieve(ihttp_socket_t socket, char *buffer, int buffer_len, int bytes_to_recieve)
+int ihttp_receive(struct HTTP_THREAD *thread, char *buffer, int buffer_len, int bytes_to_recieve)
 {
-	return recv(socket, buffer, buffer_len, 0);
+	if (!buffer_len) return 0; // nothing to receive
+	// If recv returns 0 either the client closed the connection or there's no data
+	return recv(thread->socket, buffer, buffer_len, 0);
 	
 }
 /*
-	Recieves data from the socket.
-	Will recieve exactly buffer_len bytes.
+	Receives data from the socket.
+	Will receive exactly buffer_len bytes.
 */
-int ihttp_recieve_all(ihttp_socket_t socket, char *buffer, int buffer_len)
+int ihttp_receive_all(struct HTTP_THREAD *thread, char *buffer, int buffer_len)
 {
-	// If recv returns 0 either the client closed the connection or there's no data
-	int bytes_recvd_total = 0, bytes_recvd = 0;
-	while (bytes_recvd_total < buffer_len) {
-		if ((bytes_recvd = recv(socket, &buffer[bytes_recvd_total], (buffer_len - bytes_recvd_total), 0)) <= 0) return bytes_recvd;
-		bytes_recvd_total += bytes_recvd;
+	int total_received = 0;
+	while (total_received < buffer_len) {
+		int ret = ihttp_receive(thread, &buffer[total_received], (buffer_len - total_received));
+		if (ret <= 0) return ret;
+		total_received += ret;
 	}
-	return bytes_recvd_total;
+	return total_received;
 }
 
 /*
@@ -751,7 +753,7 @@ IHTTP_THREAD_HTTP_CONTINUE:
 			// We expect for the HTTP request line (first line) to be no longer than IHTTP_MAX_REQUEST_LINE_LENGTH
 			if (ihttp->thread->request.data_header_len > IHTTP_MAX_REQUEST_LINE_LENGTH) goto HTTP_THREAD_ERR;
 			int bytes_left = IHTTP_MAX_REQUEST_LINE_LENGTH - ihttp->thread->request.data_header_len;
-			int bytes_recvd = recv(ihttp->thread->socket, &ihttp->thread->request.data_header[ihttp->thread->request.data_header_len], bytes_left, 0);
+			int bytes_recvd = ihttp_receive(ihttp->thread, &ihttp->thread->request.data_header[ihttp->thread->request.data_header_len], bytes_left);
 			
 			// if recv retuned 0 or -1, there was an error or no data
 			if (bytes_recvd <= 0) goto IHTTP_THREAD_RESET_CLOSE;
@@ -839,7 +841,7 @@ IHTTP_THREAD_HTTP_CONTINUE:
 			// TODO: if header is too large 413 Entity Too Large
 			if (ihttp->thread->request.data_header_len > IHTTP_REQUEST_HEADERS_SIZE) goto HTTP_THREAD_ERR;
 			int bytes_left = IHTTP_REQUEST_HEADERS_SIZE - ihttp->thread->request.data_header_len;
-			int bytes_recvd = recv(ihttp->thread->socket, &ihttp->thread->request.data_header[ihttp->thread->request.data_header_len], bytes_left, 0);
+			int bytes_recvd = ihttp_receive(ihttp->thread, &ihttp->thread->request.data_header[ihttp->thread->request.data_header_len], bytes_left);
 			
 			// If we get here, we need more data. if recv is less than 1 it means that it failed
 			if (bytes_recvd <= 0) goto IHTTP_THREAD_RESET_CLOSE;
@@ -910,7 +912,7 @@ IHTTP_THREAD_REQUEST_HEADERS_DONE:
 			int bytes_left = post_len - ihttp->thread->request.data_len;
 			
 			while (bytes_left > 0) {
-				int bytes_recvd = recv(ihttp->thread->socket, &ihttp->thread->request.data[ihttp->thread->request.data_len], bytes_left, 0);
+				int bytes_recvd = ihttp_receive(ihttp->thread->socket, &ihttp->thread->request.data[ihttp->thread->request.data_len], bytes_left);
 				if (bytes_recvd <= 0) {printf("Error, recv():%u\n", http_error()); goto IHTTP_THREAD_RESET_CLOSE;}
 				ihttp->thread->request.data_len += bytes_recvd;
 				bytes_left -= bytes_recvd;
@@ -1130,7 +1132,7 @@ IHTTP_CONTINUE_CONNECTION:
 		goto IHTTP_THREAD_HTTP_CONTINUE;
 	}
 	// Block and try to recieve more data.
-	int bytes_recvd = recv(ihttp->thread->socket, ihttp->thread->request.data_header, 4, 0);
+	int bytes_recvd = ihttp_receive(ihttp->thread->socket, ihttp->thread->request.data_header, 4);
 	
 	// if recv returned 0 or less, connection failed
 	if (bytes_recvd < 1) {
